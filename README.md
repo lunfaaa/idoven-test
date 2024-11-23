@@ -219,3 +219,226 @@ By following this implementation plan, we can create a robust, scalable, and hig
 ```
 
 This README.md file provides a comprehensive overview of the implementation strategy for the multi-cloud API service with a relational database. It covers all the aspects mentioned in the technical challenge, including database selection, deployment management, backup strategy, monitoring implementation, potential gray areas with solutions, and the transition to an active-active configuration.
+
+```
+
+---
+
+# Servicio API Multi-Cloud con Base de Datos Relacional
+
+Este documento describe la implementación de un servicio API desplegado en dos proveedores de nube (AWS y GCP) con una base de datos relacional, todo alojado en Kubernetes. La configuración actual es activo-pasivo, con planes para transicionar a una configuración activo-activo.
+
+## Tabla de Contenidos
+
+1. [Selección de Base de Datos](#selección-de-base-de-datos)
+2. [Gestión de Despliegues](#gestión-de-despliegues)
+3. [Estrategia de Copias de Seguridad](#estrategia-de-copias-de-seguridad)
+4. [Implementación de Monitoreo](#implementación-de-monitoreo)
+5. [Áreas Grises Potenciales y Soluciones](#áreas-grises-potenciales-y-soluciones)
+6. [Transición a Activo-Activo](#transición-a-activo-activo)
+
+## Selección de Base de Datos
+
+Hemos elegido PostgreSQL con Patroni como nuestra solución de base de datos.
+
+```mermaid
+graph TD
+    A["Requisitos de la Base de Datos"] --> B["Soporte Multi-Región"]
+    A --> C["Consistencia Fuerte"]
+    A --> D["Nativo de Kubernetes"]
+    A --> E["Agnóstico de Nube"]
+    
+    B --> F["Seleccionado: PostgreSQL con Patroni"]
+    C --> F
+    D --> F
+    E --> F
+```
+
+Justificación:
+- Agnóstico de nube y puede ejecutarse en cualquier lugar
+- Modelo de consistencia fuerte
+- Capacidades maduras de replicación
+- Gran ecosistema de herramientas y soluciones de monitoreo
+- Operadores nativos de Kubernetes disponibles (como postgres-operator de Zalando)
+
+Implementación:
+1. Usar postgres-operator de Zalando para la gestión nativa en Kubernetes
+2. Configurar replicación síncrona entre los clústeres de AWS y GCP
+3. Implementar agrupación de conexiones con PgBouncer para mejorar el rendimiento
+
+## Gestión de Despliegues
+
+Utilizaremos un enfoque GitOps para gestionar los despliegues en ambos proveedores de nube.
+
+```mermaid
+graph TD
+    A["Flujo de trabajo GitOps"] --> B["Repositorio GitLab/GitHub"]
+    B --> C["ArgoCD - GCP"]
+    B --> D["ArgoCD - AWS"]
+    C --> E["Clúster K8s GCP"]
+    D --> F["Clúster K8s AWS"]
+    
+    G["Componentes Compartidos"] --> H["Charts de Helm"]
+    G --> I["Overlays de Kustomize"]
+    H --> C
+    H --> D
+    I --> C
+    I --> D
+```
+
+Enfoque de implementación:
+1. Usar GitOps con ArgoCD para despliegues declarativos
+2. Implementar charts de Helm para el empaquetado de aplicaciones
+3. Usar Kustomize para configuraciones específicas del entorno
+4. Implementar rollbacks automatizados y comprobaciones de salud
+
+Pasos:
+1. Configurar un repositorio Git con la siguiente estructura:
+   ```
+   /
+   ├── .github/            # Flujos de trabajo de GitHub Actions
+   ├── terraform/          # Infraestructura como Código
+   │   ├── aws/
+   │   └── gcp/
+   ├── kubernetes/         # Manifiestos de Kubernetes
+   │   ├── base/
+   │   └── overlays/
+   ├── monitoring/         # Configuraciones de monitoreo
+   │   ├── prometheus/
+   │   ├── grafana/
+   │   └── alertmanager/
+   ├── database/           # Configuraciones de base de datos
+   │   ├── init/
+   │   └── migrations/
+   └── docs/               # Documentación
+       ├── architecture/
+       ├── operations/
+       └── disaster-recovery/
+   ```
+2. Configurar ArgoCD en los clústeres de Kubernetes de AWS y GCP
+3. Implementar pipelines de CI/CD para pruebas y despliegue automatizados
+
+## Estrategia de Copias de Seguridad
+
+Implementaremos una estrategia robusta de copias de seguridad para garantizar la seguridad de los datos y una recuperación rápida.
+
+```mermaid
+graph LR
+    A["PostgreSQL Primario"] --> B["Herramienta de Backup WAL-G"]
+    B --> C["Almacenamiento en la Nube - GCP"]
+    B --> D["Almacenamiento en la Nube - AWS"]
+    
+    E["Tipos de Backup"] --> F["Backups Completos"]
+    E --> G["WAL Incremental"]
+    E --> H["Recuperación a un Punto en el Tiempo"]
+```
+
+Componentes clave:
+1. Usar WAL-G para una gestión eficiente de copias de seguridad
+2. Almacenar copias de seguridad en ambos proveedores de nube para redundancia
+3. Implementar pruebas automatizadas de copias de seguridad
+4. Realizar simulacros regulares de recuperación ante desastres
+
+Pasos de implementación:
+1. Configurar WAL-G para realizar copias de seguridad completas diarias y archivado continuo de WAL
+2. Configurar replicación entre regiones para el almacenamiento de copias de seguridad
+3. Implementar scripts automatizados para verificación de copias de seguridad y pruebas de restauración
+4. Programar simulacros mensuales de recuperación ante desastres
+
+## Implementación de Monitoreo
+
+Implementaremos una solución integral de monitoreo para garantizar la salud y el rendimiento del sistema.
+
+```mermaid
+graph TD
+    A["Fuentes de Monitoreo"] --> B["Prometheus"]
+    A --> C["Loki"]
+    
+    B --> D["Alertmanager"]
+    C --> E["Grafana"]
+    D --> E
+    
+    F["Tipos de Métricas"] --> G["Infraestructura"]
+    F --> H["Aplicación"]
+    F --> I["Negocio"]
+    
+    G --> B
+    H --> B
+    I --> B
+```
+
+Componentes del stack de monitoreo:
+1. Prometheus para la recolección de métricas
+2. Loki para la agregación de logs
+3. Grafana para la visualización
+4. Alertas personalizadas basadas en SLOs
+
+Pasos de implementación:
+1. Desplegar Prometheus Operator en ambos clústeres de Kubernetes
+2. Configurar ServiceMonitors para el descubrimiento automático de servicios
+3. Configurar Loki para la agregación y consulta de logs
+4. Crear dashboards en Grafana para visualizar métricas y logs clave
+5. Definir e implementar SLOs con reglas de alerta correspondientes
+
+## Áreas Grises Potenciales y Soluciones
+
+1. Consistencia de Datos
+
+```mermaid
+graph TD
+    A["Desafíos de Consistencia"] --> B["Latencia de Red"]
+    A --> C["Split Brain"]
+    A --> D["Pérdida de Datos"]
+    
+    B --> E["Soluciones"]
+    C --> E
+    D --> E
+    
+    E --> F["Replicación Síncrona"]
+    E --> G["Failover Automatizado"]
+    E --> H["Chequeos de Salud Regulares"]
+```
+
+Soluciones:
+- Implementar replicación síncrona entre las bases de datos primaria y de respaldo
+- Usar Patroni para failover automatizado y elección de líder
+- Implementar chequeos de salud regulares y procedimientos de recuperación automatizados
+
+2. Problemas de Red
+- Implementar circuit breakers para prevenir fallos en cascada
+- Usar mecanismos de reintento con retroceso exponencial para problemas transitorios
+- Monitorear la latencia de red entre regiones y configurar alertas para condiciones anormales
+
+## Transición a Activo-Activo
+
+Para pasar de una configuración activo-pasivo a activo-activo, necesitamos hacer las siguientes modificaciones:
+
+```mermaid
+graph TD
+    A["Balanceador de Carga Global"] --> B["Región GCP"]
+    A --> C["Región AWS"]
+    
+    B --> D["Clúster K8s GCP"]
+    C --> E["Clúster K8s AWS"]
+    
+    D --> F["PostgreSQL Primario"]
+    E --> G["PostgreSQL Primario"]
+    
+    F <--> G["Replicación Bidireccional"]
+```
+
+Modificaciones requeridas:
+1. Implementar balanceo de carga global (por ejemplo, usando AWS Global Accelerator o Google Cloud Load Balancing)
+2. Configurar replicación bidireccional de la base de datos (considerar el uso de herramientas como BDR o Postgres-BDR)
+3. Implementar una estrategia de resolución de conflictos para posibles conflictos de datos
+4. Actualizar la aplicación para manejar escrituras multi-master y posibles conflictos
+5. Implementar mecanismos adecuados de invalidación de caché entre regiones
+
+Pasos de implementación:
+1. Configurar balanceo de carga global usando soluciones nativas de la nube
+2. Configurar replicación bidireccional para PostgreSQL
+3. Modificar el código de la aplicación para manejar escrituras distribuidas y posibles conflictos
+4. Implementar una capa de caché distribuida (por ejemplo, Redis) con invalidación entre regiones
+5. Actualizar el monitoreo y las alertas para tener en cuenta la configuración activo-activo
+
+Siguiendo este plan de implementación, podemos crear un servicio API multi-cloud robusto, escalable y altamente disponible con una base de datos relacional. La solución aborda la configuración activo-pasivo actual y proporciona un camino claro para la transición a una configuración activo-activo en el futuro.
