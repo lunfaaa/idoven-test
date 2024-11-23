@@ -224,6 +224,18 @@ This README.md file provides a comprehensive overview of the implementation stra
 
 ---
 
+#
+#
+#
+#
+#
+    
+
+# SPANISH VERSION
+
+
+
+
 # Servicio API Multi-Cloud con Base de Datos Relacional
 
 Este documento describe la implementación de un servicio API desplegado en dos proveedores de nube (AWS y GCP) con una base de datos relacional, todo alojado en Kubernetes. La configuración actual es activo-pasivo, con planes para transicionar a una configuración activo-activo.
